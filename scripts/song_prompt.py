@@ -32,6 +32,7 @@ class PromptTrack:
 class PromptSpec:
     tracks: list[PromptTrack] = field(default_factory=list)
     style: str | None = None
+    source_urls: list[str] = field(default_factory=list)
 
 
 def parse_song_prompt(prompt: str) -> list[PromptTrack]:
@@ -43,8 +44,14 @@ def parse_prompt_spec(prompt: str) -> PromptSpec:
     """Parse style metadata and track queries from loose text or markdown."""
     style = _extract_markdown_section(prompt, "style")
     track_text = _extract_markdown_section(prompt, "tracks")
-    tracks = _parse_track_lines(track_text if track_text is not None else prompt)
-    return PromptSpec(tracks=tracks, style=style)
+    source_urls = _extract_source_urls(prompt)
+    if track_text is not None:
+        tracks = _parse_track_lines(track_text)
+    elif source_urls:
+        tracks = []
+    else:
+        tracks = _parse_track_lines(prompt)
+    return PromptSpec(tracks=tracks, style=style, source_urls=source_urls)
 
 
 def _parse_track_lines(text: str) -> list[PromptTrack]:
@@ -85,6 +92,16 @@ def _extract_markdown_section(prompt: str, section_name: str) -> str | None:
 
     text = "\n".join(lines).strip()
     return text or None
+
+
+def _extract_source_urls(prompt: str) -> list[str]:
+    urls: list[str] = []
+    for match in re.finditer(r"https?://[^\s<>)]+", prompt):
+        url = match.group(0).rstrip(".,;")
+        lowered = url.lower()
+        if any(host in lowered for host in ("soundcloud.com", "youtube.com", "youtu.be")):
+            urls.append(url)
+    return urls
 
 
 def _clean_line(line: str) -> str:

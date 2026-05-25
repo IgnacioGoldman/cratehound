@@ -1,0 +1,4 @@
+interface:
+  display_name: "Discover DJ Tracklists"
+  short_description: "Find set tracklists from public music links"
+  default_prompt: "Use $discover-dj-tracklists to find the tracklist for this DJ set link."

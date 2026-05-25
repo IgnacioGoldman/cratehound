@@ -19,6 +19,11 @@ from .organizer import organize_set_results, write_markdown_report
 from .prompt_download import download_from_prompt
 from .song_prompt import parse_prompt_spec
 from .sources.muzpa_scraper import MuzpaScraperError
+from .tracklist_discovery import (
+    TracklistDiscoveryError,
+    append_tracks_section,
+    discover_tracklist_from_urls,
+)
 
 
 def main() -> int:
@@ -31,6 +36,11 @@ def main() -> int:
     parser.add_argument("--set-name", help="Folder name under downloads. Defaults to the prompt filename.")
     parser.add_argument("--timeout-ms", type=int, default=25_000, help="Playwright timeout in milliseconds.")
     parser.add_argument("--headed", action="store_true", help="Show the browser while downloading.")
+    parser.add_argument(
+        "--no-discover",
+        action="store_true",
+        help="Do not discover tracklists from source links when the prompt has no tracks.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Parse the prompt and print queries without downloading.")
     parser.add_argument("--output", type=Path, help="Write JSON results to this file instead of stdout.")
     args = parser.parse_args()
@@ -40,7 +50,11 @@ def main() -> int:
         print("No prompt supplied.", file=sys.stderr)
         return 2
 
-    spec = parse_prompt_spec(prompt)
+    try:
+        prompt, spec, discovery_notes = _resolve_prompt(prompt, args.prompt_file, discover=not args.no_discover)
+    except TracklistDiscoveryError as exc:
+        print(f"Tracklist discovery failed: {exc}", file=sys.stderr)
+        return 1
     style = args.style or spec.style
     set_name = args.set_name or (args.prompt_file.stem if args.prompt_file else None)
     downloads_dir = args.downloads_dir / set_name if set_name else args.downloads_dir
@@ -54,6 +68,7 @@ def main() -> int:
                     {"query": track.query, "title": track.title, "artist": track.artist}
                     for track in spec.tracks
                 ],
+                "discovery_notes": discovery_notes,
             },
             indent=2,
             ensure_ascii=False,
@@ -90,6 +105,20 @@ def main() -> int:
     else:
         print(rendered)
     return 0
+
+
+def _resolve_prompt(prompt: str, prompt_file: Path | None, *, discover: bool):
+    spec = parse_prompt_spec(prompt)
+    if spec.tracks or not discover:
+        return prompt, spec, []
+    if not spec.source_urls:
+        return prompt, spec, []
+
+    discovery = discover_tracklist_from_urls(spec.source_urls)
+    prompt = append_tracks_section(prompt, discovery.markdown_tracks())
+    if prompt_file:
+        prompt_file.write_text(prompt + "\n", encoding="utf-8")
+    return prompt, parse_prompt_spec(prompt), discovery.notes
 
 
 def _read_prompt(parts: list[str], prompt_file: Path | None) -> str:

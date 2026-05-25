@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .song_prompt import parse_prompt_spec
 from .sources.muzpa_scraper import MuzpaDownloadResult, download_muzpa_tracks
+from .tracklist_discovery import append_tracks_section, discover_tracklist_from_urls
 
 
 async def download_from_prompt(
@@ -20,6 +21,10 @@ async def download_from_prompt(
     style: str | None = None,
 ) -> list[MuzpaDownloadResult]:
     spec = parse_prompt_spec(prompt)
+    if not spec.tracks and spec.source_urls:
+        discovery = discover_tracklist_from_urls(spec.source_urls)
+        prompt = append_tracks_section(prompt, discovery.markdown_tracks())
+        spec = parse_prompt_spec(prompt)
     return await download_muzpa_tracks(
         [track.to_muzpa_query() for track in spec.tracks],
         release_date=release_date,

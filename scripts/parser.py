@@ -60,6 +60,10 @@ def _split_title_artist(body: str) -> tuple[str, str]:
       • uses the *first* `` - `` (space-hyphen-space) as separator.
       • en-dash (–) and em-dash (—) also accepted.
     """
+    by_match = re.match(r"(?P<title>.+?)\s+by\s+(?P<artist>.+)$", body, flags=re.I)
+    if by_match:
+        return by_match.group("title").strip(), by_match.group("artist").strip()
+
     separators = [" - ", " – ", " — "]
     for sep in separators:
         idx = body.find(sep)
